@@ -78,8 +78,8 @@ export function Editor({ project, brand, onUpdate, onBack }: Props) {
   const [busy, setBusy] = useState(false);
   const [showPrompt, setShowPrompt] = useState(false);
   const [showPaste, setShowPaste] = useState(false);
-  const [capturingSlide, setCapturingSlide] = useState<Slide | null>(null);
-  const exportHostRef = useRef<HTMLDivElement>(null);
+  const [exportStatus, setExportStatus] = useState("");
+  const previewCanvasRef = useRef<HTMLDivElement>(null);
 
   function applyAI(parsed: ParsedAI) {
     commit((p) => applyAIResponse(p, parsed));
@@ -167,35 +167,40 @@ export function Editor({ project, brand, onUpdate, onBack }: Props) {
     setIdx((i) => i + 1);
   }
 
-  async function captureSlideNode(slide: Slide): Promise<HTMLElement> {
-    setCapturingSlide(slide);
-    await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
-    const node = exportHostRef.current?.firstElementChild as HTMLElement | null;
-    if (!node) throw new Error("Nó de exportação não encontrado");
+  async function waitPreviewPaint(): Promise<HTMLElement> {
+    await new Promise<void>((r) => {
+      requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+    });
+    const node = previewCanvasRef.current;
+    if (!node) throw new Error("Preview do slide não encontrado");
     return node;
   }
 
   async function doExportSingle() {
     setBusy(true);
+    setExportStatus("Gerando PNG…");
     try {
-      const node = await captureSlideNode(current);
+      const node = await waitPreviewPaint();
       await exportSingle(node, proj.name, idx);
     } finally {
-      setCapturingSlide(null);
+      setExportStatus("");
       setBusy(false);
     }
   }
 
   async function doExportCarousel() {
     setBusy(true);
+    const startIdx = idx;
     try {
-      const nodes: HTMLElement[] = [];
-      for (const s of proj.slides) {
-        nodes.push(await captureSlideNode(s));
-      }
-      await exportCarousel(nodes, proj.name, proj.caption, proj.hashtags);
+      const captureFns = proj.slides.map((_, i) => async () => {
+        setExportStatus(`Exportando slide ${i + 1}/${proj.slides.length}…`);
+        setIdx(i);
+        return waitPreviewPaint();
+      });
+      await exportCarousel(captureFns, proj.name, proj.caption, proj.hashtags);
     } finally {
-      setCapturingSlide(null);
+      setIdx(startIdx);
+      setExportStatus("");
       setBusy(false);
     }
   }
@@ -222,7 +227,7 @@ export function Editor({ project, brand, onUpdate, onBack }: Props) {
             <Download size={16} /> Slide
           </button>
           <button className="btn" disabled={busy} onClick={doExportCarousel}>
-            <Images size={16} /> {busy ? "Exportando..." : "Exportar carrossel"}
+            <Images size={16} /> {busy ? exportStatus || "Exportando…" : "Exportar carrossel"}
           </button>
         </div>
       </header>
@@ -234,10 +239,11 @@ export function Editor({ project, brand, onUpdate, onBack }: Props) {
           <div className="stage__frame">
             <div style={{ width: 1080 * PREVIEW_SCALE, height: 1350 * PREVIEW_SCALE, overflow: "hidden", boxShadow: "0 30px 80px -30px rgba(0,0,0,.5)", borderRadius: 10 }}>
               <div style={{ width: 1080, height: 1350, transform: `scale(${PREVIEW_SCALE})`, transformOrigin: "top left" }}>
-                <SlideCanvas slide={current} brand={brand} />
+                <SlideCanvas ref={previewCanvasRef} slide={current} brand={brand} />
               </div>
             </div>
           </div>
+          {exportStatus && <div className="stage__export-hint">{exportStatus}</div>}
           {overflow && <div className="warn">Texto longo demais para este layout — reduza o texto ou o tamanho do título.</div>}
           <div className="stage__nav">
             <button className="iconbtn" onClick={regenText} title="Regenerar texto">
@@ -392,15 +398,6 @@ export function Editor({ project, brand, onUpdate, onBack }: Props) {
           </div>
         </aside>
       </div>
-
-      {/* Monta 1 slide por vez em tamanho real para exportação fiel ao preview */}
-      {capturingSlide && (
-        <div className="export-capture" aria-hidden>
-          <div ref={exportHostRef}>
-            <SlideCanvas slide={capturingSlide} brand={brand} />
-          </div>
-        </div>
-      )}
 
       {showPrompt && <PromptDialog prompt={buildAIPrompt(proj.meta, brand)} onClose={() => setShowPrompt(false)} />}
       {showPaste && <PasteAIDialog onApply={applyAI} onClose={() => setShowPaste(false)} />}

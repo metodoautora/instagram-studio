@@ -1,9 +1,12 @@
-import { toPng } from "html-to-image";
+import { domToPng } from "modern-screenshot";
 import JSZip from "jszip";
 import { saveAs } from "file-saver";
 
-const W = 1080;
-const H = 1350;
+export const EXPORT_W = 1080;
+export const EXPORT_H = 1350;
+
+/** Render interno em 2× para nitidez, depois reduz para 1080×1350. */
+const CAPTURE_SCALE = 2;
 
 async function preloadFonts(): Promise<void> {
   if (!document.fonts?.load) return;
@@ -19,7 +22,7 @@ async function preloadFonts(): Promise<void> {
   }
 }
 
-function waitFrames(n = 2): Promise<void> {
+function waitFrames(n = 3): Promise<void> {
   return new Promise((resolve) => {
     let i = 0;
     const tick = () => {
@@ -31,43 +34,47 @@ function waitFrames(n = 2): Promise<void> {
   });
 }
 
-/** Rasteriza um nó 1080×1350 — precisa estar montado e visível (opacity 1). */
+/** Reduz PNG 2× para tamanho final exato (1080×1350). */
+async function downscale(dataUrl: string, w: number, h: number): Promise<Blob> {
+  const img = new Image();
+  img.decoding = "async";
+  await new Promise<void>((res, rej) => {
+    img.onload = () => res();
+    img.onerror = rej;
+    img.src = dataUrl;
+  });
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Canvas não disponível");
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(img, 0, 0, w, h);
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Falha ao gerar PNG"))), "image/png");
+  });
+}
+
+/**
+ * Captura exatamente o nó visível do preview (WYSIWYG).
+ * O elemento deve ser o SlideCanvas 1080×1350 que o browser já renderizou.
+ */
 export async function captureElement(node: HTMLElement): Promise<Blob> {
   await preloadFonts();
-  await waitFrames(3);
+  await waitFrames(4);
 
   const bg = node.dataset.exportBg || "#120D0A";
 
-  const dataUrl = await toPng(node, {
-    width: W,
-    height: H,
-    pixelRatio: 1,
+  const dataUrl = await domToPng(node, {
+    width: EXPORT_W,
+    height: EXPORT_H,
+    scale: CAPTURE_SCALE,
     backgroundColor: bg,
-    cacheBust: true,
-    skipFonts: false,
-    includeQueryParams: true,
-    style: {
-      transform: "none",
-      transformOrigin: "top left",
-      margin: "0",
-      width: `${W}px`,
-      height: `${H}px`,
-    },
-    filter: (domNode) => {
-      if (domNode instanceof HTMLElement) {
-        // mix-blend-mode quebra no clone do html-to-image
-        if (domNode.style.mixBlendMode && domNode.style.mixBlendMode !== "normal") {
-          domNode.style.mixBlendMode = "normal";
-          const op = parseFloat(domNode.style.opacity || "1");
-          if (!Number.isNaN(op)) domNode.style.opacity = String(Math.min(1, op * 1.35));
-        }
-      }
-      return true;
-    },
+    quality: 1,
   });
 
-  const res = await fetch(dataUrl);
-  return await res.blob();
+  return downscale(dataUrl, EXPORT_W, EXPORT_H);
 }
 
 function safeName(s: string): string {
@@ -86,15 +93,16 @@ export async function exportSingle(node: HTMLElement, baseName: string, index: n
 }
 
 export async function exportCarousel(
-  nodes: HTMLElement[],
+  captureFns: (() => Promise<HTMLElement>)[], 
   baseName: string,
   caption: string,
   hashtags: string
 ): Promise<void> {
   const zip = new JSZip();
   const base = safeName(baseName);
-  for (let i = 0; i < nodes.length; i++) {
-    const blob = await captureElement(nodes[i]);
+  for (let i = 0; i < captureFns.length; i++) {
+    const node = await captureFns[i]();
+    const blob = await captureElement(node);
     zip.file(`${base}-slide-${String(i + 1).padStart(2, "0")}.png`, blob);
   }
   const legenda = `${caption}\n\n${hashtags}\n`;

@@ -361,8 +361,7 @@ export const SlideCanvas = forwardRef<HTMLDivElement, Props>(function SlideCanva
           inset: 0,
           backgroundImage: NOISE,
           backgroundSize: "200px 200px",
-          opacity: slide.grain / 100,
-          mixBlendMode: "overlay",
+          opacity: (slide.grain / 100) * 0.55,
           pointerEvents: "none",
         }}
       />
