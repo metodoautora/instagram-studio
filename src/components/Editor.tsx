@@ -80,7 +80,8 @@ export function Editor({ project, brand, onUpdate, onBack }: Props) {
   const [exportMsg, setExportMsg] = useState("");
   const [showPrompt, setShowPrompt] = useState(false);
   const [showPaste, setShowPaste] = useState(false);
-  const previewCanvasRef = useRef<HTMLDivElement>(null);
+  const [captureSlide, setCaptureSlide] = useState<Slide | null>(null);
+  const captureRef = useRef<HTMLDivElement>(null);
 
   function applyAI(parsed: ParsedAI) {
     setProj((p) => applyAIResponse(p, parsed));
@@ -164,22 +165,34 @@ export function Editor({ project, brand, onUpdate, onBack }: Props) {
   }
 
   async function captureAt(index: number): Promise<Blob> {
-    flushSync(() => setIdx(index));
-    setExportMsg(`Exportando slide ${index + 1}…`);
-    const node = previewCanvasRef.current;
-    if (!node) throw new Error("Preview do slide indisponível");
-    return captureSlideBlob(node, brand);
+    const slide = proj.slides[index];
+    flushSync(() => {
+      setIdx(index);
+      setCaptureSlide(slide);
+    });
+    setExportMsg(`Capturando slide ${index + 1}…`);
+    await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const node = captureRef.current;
+    if (!node) throw new Error("Captura indisponível");
+    try {
+      return await captureSlideBlob(node, brand);
+    } finally {
+      flushSync(() => setCaptureSlide(null));
+    }
   }
 
   async function doExportSingle() {
     setBusy(true);
-    setExportMsg(`Exportando slide ${idx + 1}…`);
+    setExportMsg(`Capturando slide ${idx + 1}…`);
+    flushSync(() => setCaptureSlide(proj.slides[idx]));
     try {
-      const node = previewCanvasRef.current;
+      await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const node = captureRef.current;
       if (!node) return;
       const blob = await captureSlideBlob(node, brand);
       saveSlideBlob(blob, proj.name, idx);
     } finally {
+      flushSync(() => setCaptureSlide(null));
       setExportMsg("");
       setBusy(false);
     }
@@ -235,7 +248,7 @@ export function Editor({ project, brand, onUpdate, onBack }: Props) {
           <div className="stage__frame">
             <div style={{ width: 1080 * PREVIEW_SCALE, height: 1350 * PREVIEW_SCALE, overflow: "hidden", boxShadow: "0 30px 80px -30px rgba(0,0,0,.5)", borderRadius: 10 }}>
               <div style={{ width: 1080, height: 1350, transform: `scale(${PREVIEW_SCALE})`, transformOrigin: "top left" }}>
-                <SlideCanvas ref={previewCanvasRef} slide={current} brand={brand} forExport={busy} />
+                <SlideCanvas slide={current} brand={brand} />
               </div>
             </div>
           </div>
@@ -393,6 +406,12 @@ export function Editor({ project, brand, onUpdate, onBack }: Props) {
           </div>
         </aside>
       </div>
+
+      {captureSlide && (
+        <div className="capture-portal" aria-hidden>
+          <SlideCanvas ref={captureRef} slide={captureSlide} brand={brand} />
+        </div>
+      )}
 
       {busy && exportMsg && <div className="export-overlay">{exportMsg}</div>}
 

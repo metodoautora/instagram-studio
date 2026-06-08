@@ -698,6 +698,17 @@ input[type="range"] {
   }
 }
 
+/* Captura 1080×1350 real — screenshot pixel-a-pixel (fora da escala do preview) */
+.capture-portal {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 1080px;
+  height: 1350px;
+  z-index: 9997;
+  pointer-events: none;
+}
+
 /* Overlay durante exportação */
 .export-overlay {
   position: fixed;

@@ -91,11 +91,9 @@ function HandConnector({ color }: { color: string }) {
 interface Props {
   slide: Slide;
   brand: BrandKit;
-  /** Modo exportação: grão sem mix-blend (compatível com captura PNG). */
-  forExport?: boolean;
 }
 
-export const SlideCanvas = forwardRef<HTMLDivElement, Props>(function SlideCanvas({ slide, brand, forExport = false }, ref) {
+export const SlideCanvas = forwardRef<HTMLDivElement, Props>(function SlideCanvas({ slide, brand }, ref) {
   const t = slide.templateId;
   const kind = templateKind(t);
   const accent = slide.accent || brand.palette.orange;
@@ -172,11 +170,9 @@ export const SlideCanvas = forwardRef<HTMLDivElement, Props>(function SlideCanva
   );
 
   /** Coluna principal + rodapé editorial sem position:absolute (evita sobreposição). */
-  const clip = forExport ? "visible" : "hidden";
-
   const stack = (main: ReactNode, foot?: ReactNode) => (
-    <div style={{ height: "100%", display: "flex", flexDirection: "column", minHeight: 0, overflow: clip }}>
-      <div style={{ flex: 1, minHeight: 0, overflow: clip, display: "flex", flexDirection: "column" }}>{main}</div>
+    <div style={{ height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
+      <div style={{ flex: 1, minHeight: 0, overflow: "hidden", display: "flex", flexDirection: "column" }}>{main}</div>
       {foot && <div style={{ flexShrink: 0, paddingTop: 24 }}>{foot}</div>}
     </div>
   );
@@ -214,7 +210,7 @@ export const SlideCanvas = forwardRef<HTMLDivElement, Props>(function SlideCanva
         const style: ListStyle = slide.listStyle !== "none" ? slide.listStyle : "number";
         return (
           <div style={{ height: "100%", display: "flex", gap: 40, minHeight: 0 }}>
-            <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "center", overflow: clip }}>
+            <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "center", overflow: "hidden" }}>
               <List style={style} fontSize={34} />
             </div>
             <div style={{ width: 360, flexShrink: 0, display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
@@ -277,9 +273,9 @@ export const SlideCanvas = forwardRef<HTMLDivElement, Props>(function SlideCanva
       case "t9": {
         const style: ListStyle = slide.listStyle !== "none" ? slide.listStyle : "brace";
         return (
-          <div style={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "flex-start", gap: 36, paddingTop: 20, minHeight: 0, overflow: clip }}>
+          <div style={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "flex-start", gap: 36, paddingTop: 20, minHeight: 0, overflow: "hidden" }}>
             <h1 style={{ ...titleStyle, fontSize: Math.max(slide.titleSize, 96), flexShrink: 0 }}>{rich(slide.title, slide.highlight, accent)}</h1>
-            <div style={{ flex: 1, minHeight: 0, overflow: clip }}>
+            <div style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
               <List style={style} />
             </div>
           </div>
@@ -308,7 +304,8 @@ export const SlideCanvas = forwardRef<HTMLDivElement, Props>(function SlideCanva
   }
 
   const showHandNote = !!slide.handNote && t !== "t7" && t !== "t8";
-  const grainOpacity = forExport ? (slide.grain / 100) * 0.55 : slide.grain / 100;
+  // Grão compatível com screenshot (sem mix-blend) — preview = export.
+  const grainOpacity = (slide.grain / 100) * 0.6;
 
   return (
     <div
@@ -363,7 +360,7 @@ export const SlideCanvas = forwardRef<HTMLDivElement, Props>(function SlideCanva
           backgroundImage: NOISE,
           backgroundSize: "200px 200px",
           opacity: grainOpacity,
-          mixBlendMode: forExport ? "normal" : "overlay",
+          mixBlendMode: "normal",
           pointerEvents: "none",
         }}
       />
@@ -396,7 +393,7 @@ export const SlideCanvas = forwardRef<HTMLDivElement, Props>(function SlideCanva
           </div>
         )}
 
-        <div style={{ flex: 1, minHeight: 0, overflow: clip }}>{layout()}</div>
+        <div style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>{layout()}</div>
 
         {showHandNote && (
           <div style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 16, marginTop: 16, paddingTop: 8 }}>

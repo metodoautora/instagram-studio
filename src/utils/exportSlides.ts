@@ -1,4 +1,4 @@
-import { toPng } from "html-to-image";
+import { domToPng } from "modern-screenshot";
 import JSZip from "jszip";
 import { saveAs } from "file-saver";
 import { CANVAS_H, CANVAS_W } from "../components/SlideCanvas";
@@ -30,27 +30,22 @@ export async function waitForRender(brand?: BrandKit): Promise<void> {
     }
   }
   await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
-  // Rede mais lenta no GitHub Pages — espera extra para o layout flex estabilizar.
-  await new Promise((r) => setTimeout(r, 200));
+  await new Promise((r) => setTimeout(r, 250));
 }
 
-async function nodeToBlob(node: HTMLElement): Promise<Blob> {
-  const dataUrl = await toPng(node, {
+/** Screenshot pixel-a-pixel do nó DOM (como print da tela). */
+async function screenshotNode(node: HTMLElement): Promise<Blob> {
+  const dataUrl = await domToPng(node, {
     width: CANVAS_W,
     height: CANVAS_H,
-    pixelRatio: 1,
-    cacheBust: true,
-    skipAutoScale: true,
-    skipFonts: false,
-    includeQueryParams: true,
+    scale: 1,
+    backgroundColor: null,
     style: {
       transform: "none",
-      transformOrigin: "top left",
       margin: "0",
       padding: "0",
     },
   });
-
   const res = await fetch(dataUrl);
   return await res.blob();
 }
@@ -71,7 +66,7 @@ export function saveSlideBlob(blob: Blob, baseName: string, index: number): void
 
 export async function captureSlideBlob(node: HTMLElement, brand: BrandKit): Promise<Blob> {
   await waitForRender(brand);
-  return nodeToBlob(node);
+  return screenshotNode(node);
 }
 
 export async function exportCarousel(
