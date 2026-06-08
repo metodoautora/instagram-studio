@@ -1,7 +1,15 @@
 import { BrandKit, Project } from "../types";
+import { defaultBrandKit } from "../data/brandKit";
 
 const PROJECTS_KEY = "mais_projects_v1";
 const BRAND_KEY = "mais_brandkit_v1";
+/** Granulado padrão antigo — migra para o valor atual do brand kit. */
+const LEGACY_GRAIN_DEFAULT = 38;
+
+function migrateGrain(value: number | undefined): number {
+  if (value === LEGACY_GRAIN_DEFAULT) return defaultBrandKit.grain;
+  return value ?? defaultBrandKit.grain;
+}
 
 export function uid(): string {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
@@ -21,6 +29,7 @@ export function loadProjects(): Project[] {
         handNote: s.handNote ?? "",
         showHandle: s.showHandle ?? false,
         showSignature: s.showSignature ?? false,
+        grain: migrateGrain(s.grain),
       })),
     }));
   } catch {
@@ -39,7 +48,13 @@ export function saveProjects(projects: Project[]): void {
 export function loadBrandKit(): BrandKit | null {
   try {
     const raw = localStorage.getItem(BRAND_KEY);
-    return raw ? (JSON.parse(raw) as BrandKit) : null;
+    if (!raw) return null;
+    const stored = JSON.parse(raw) as BrandKit;
+    return {
+      ...defaultBrandKit,
+      ...stored,
+      grain: migrateGrain(stored.grain),
+    };
   } catch {
     return null;
   }
