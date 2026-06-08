@@ -26,6 +26,12 @@ npm run build
 npm run preview
 ```
 
+## Online (GitHub Pages)
+
+https://metodoautora.github.io/instagram-studio/
+
+O deploy roda automaticamente a cada push na branch `main`.
+
 ## Stack
 
 React + Vite + TypeScript, CSS puro, html-to-image, JSZip.
