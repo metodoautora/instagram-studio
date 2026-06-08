@@ -1,4 +1,4 @@
-import { Project } from "../types";
+import { Project, Slide } from "../types";
 import { uid } from "./storage";
 
 export interface ParsedSlide {
@@ -18,9 +18,23 @@ function deaccent(s: string): string {
   return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 }
 
+function normalizeInput(text: string): string {
+  return text
+    .replace(/\r/g, "")
+    .replace(/\uFEFF/g, "")
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201C\u201D]/g, '"')
+    .replace(/[\u2013\u2014]/g, "-")
+    .replace(/[\uFF1A]/g, ":"); // colon fullwidth
+}
+
 /** Remove markdown leve que a IA às vezes coloca nos rótulos ou no texto. */
 function stripMd(s: string): string {
-  return s.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1").replace(/^#+\s*/, "");
+  return s
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/\*([^*]+)\*/g, "$1")
+    .replace(/^#+\s*/, "")
+    .trim();
 }
 
 const LABEL_RE =
@@ -33,14 +47,9 @@ const LABEL_RE =
  *   Destaque: ...
  *   Secundário: ... (pode ter várias linhas)
  *   Balão: ...
- *   ...
- *   Legenda: ...
- *   Hashtags: ...
- *
- * Tolera variações comuns: markdown, acentos, Slide 1:, campos vazios.
  */
 export function parseAIResponse(text: string): ParsedAI {
-  const lines = text.replace(/\r/g, "").split("\n");
+  const lines = normalizeInput(text).split("\n");
   const slides: ParsedSlide[] = [];
   let cur: ParsedSlide | null = null;
   let mode: "secondary" | "caption" | "hashtags" | null = null;
@@ -59,6 +68,10 @@ export function parseAIResponse(text: string): ParsedAI {
     cur = slide;
     mode = null;
     return slide;
+  }
+
+  function ensureSlide(): ParsedSlide {
+    return cur ?? startSlide();
   }
 
   for (const raw of lines) {
@@ -82,26 +95,25 @@ export function parseAIResponse(text: string): ParsedAI {
         continue;
       }
       if (label.startsWith("titulo")) {
-        const s = cur ?? startSlide();
-        s.titulo = rest;
+        const prev = slides[slides.length - 1];
+        if (prev?.titulo) startSlide();
+        ensureSlide().titulo = rest;
         mode = null;
         continue;
       }
       if (label.startsWith("destaque")) {
-        const s = cur ?? startSlide();
-        s.destaque = rest;
+        ensureSlide().destaque = rest;
         mode = null;
         continue;
       }
       if (label.startsWith("secund")) {
-        if (!cur) startSlide();
-        if (rest) secondaryBuf.push(rest);
+        ensureSlide();
+        if (rest) secondaryBuf.push(rest.replace(/^[-•]\s*/, ""));
         mode = "secondary";
         continue;
       }
       if (label.startsWith("balao")) {
-        const s = cur ?? startSlide();
-        s.balao = rest;
+        ensureSlide().balao = rest;
         mode = null;
         continue;
       }
@@ -117,7 +129,6 @@ export function parseAIResponse(text: string): ParsedAI {
       }
     }
 
-    // Slide só com número: "1." ou "1)"
     const numSlide = line.match(/^(\d+)[.)]\s*$/);
     if (numSlide) {
       if (mode === "secondary") flushSecondary();
@@ -125,8 +136,7 @@ export function parseAIResponse(text: string): ParsedAI {
       continue;
     }
 
-    // Linhas de continuação
-    if (mode === "secondary") secondaryBuf.push(line);
+    if (mode === "secondary") secondaryBuf.push(line.replace(/^[-•]\s*/, ""));
     else if (mode === "caption") captionBuf.push(line);
     else if (mode === "hashtags") hashtags += (hashtags ? " " : "") + line;
   }
@@ -147,10 +157,20 @@ export function parseAIResponse(text: string): ParsedAI {
   };
 }
 
+function pickTemplate(ps: ParsedSlide, tmpl: Slide, index: number, total: number): Slide["templateId"] {
+  const lines = ps.secondary.split("\n").filter((l) => l.trim()).length;
+  if (index === total - 1) return "t8";
+  if (index === 0) return lines >= 2 ? "t1" : "t5";
+  if (lines >= 3) return "t9";
+  if (lines >= 1) return "t6";
+  return tmpl.templateId;
+}
+
 /** Aplica o conteúdo da IA sobre um projeto base, preservando o design dos slides. */
 export function applyAIResponse(base: Project, parsed: ParsedAI): Project {
   if (!parsed.slides.length) return base;
 
+  const total = parsed.slides.length;
   const slides = parsed.slides.map((ps, i) => {
     const tmpl = base.slides[i] ?? base.slides[base.slides.length - 1];
     let title = ps.titulo;
@@ -158,20 +178,25 @@ export function applyAIResponse(base: Project, parsed: ParsedAI): Project {
     if (destaque && title && !title.includes(destaque)) {
       title = `${title}\n${destaque}`;
     }
+    const secLines = ps.secondary.split("\n").filter((l) => l.trim()).length;
+    const templateId = pickTemplate(ps, tmpl, i, total);
     return {
       ...tmpl,
       id: uid(),
+      templateId,
       title: title || tmpl.title,
       secondary: ps.secondary,
       highlight: destaque,
       handNote: ps.balao,
+      listStyle: templateId === "t9" && secLines >= 2 ? ("brace" as const) : ("none" as const),
       showHandle: i === 0,
-      showSignature: i === parsed.slides.length - 1,
+      showSignature: i === total - 1,
     };
   });
 
   return {
     ...base,
+    meta: { ...base.meta, slidesCount: slides.length },
     slides,
     caption: parsed.caption || base.caption,
     hashtags: parsed.hashtags || base.hashtags,

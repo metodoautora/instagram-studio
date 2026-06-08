@@ -16,10 +16,6 @@ function hexA(hex: string, alpha: number): string {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
-/**
- * Markup inline simples:
- *  **negrito**  *itálico*  ==destaque na cor de acento==
- */
 function parseRich(text: string, accent: string): ReactNode {
   const regex = /(\*\*[^*]+\*\*|\*[^*]+\*|==[^=]+==)/g;
   const out: ReactNode[] = [];
@@ -54,7 +50,6 @@ function parseRich(text: string, accent: string): ReactNode {
   return out;
 }
 
-/** Aplica o campo legado `highlight` como ==...== e renderiza com markup. */
 function rich(text: string, highlight: string, accent: string): ReactNode {
   let t = text;
   if (highlight && text.includes(highlight)) {
@@ -63,7 +58,6 @@ function rich(text: string, highlight: string, accent: string): ReactNode {
   return parseRich(t, accent);
 }
 
-/** Chave/colchete desenhado à mão (marcador de lista). */
 function Brace({ color }: { color: string }) {
   return (
     <svg width="26" height="58" viewBox="0 0 26 58" fill="none" style={{ flex: "none", marginTop: 4 }}>
@@ -90,7 +84,6 @@ function Marker({ style, accent, index, brand }: { style: ListStyle; accent: str
   return null;
 }
 
-/** Conector manuscrito (seta curva) que aponta para a anotação. */
 function HandConnector({ color }: { color: string }) {
   return (
     <svg width="74" height="96" viewBox="0 0 74 96" fill="none" style={{ flex: "none" }}>
@@ -145,8 +138,6 @@ export const SlideCanvas = forwardRef<HTMLDivElement, Props>(function SlideCanva
     whiteSpace: "pre-line",
   };
 
-  const Title = () => <h1 style={titleStyle}>{rich(slide.title, slide.highlight, accent)}</h1>;
-
   const lines = slide.secondary.split("\n").map((l) => l.trim()).filter(Boolean);
 
   const List = ({ style, fontSize = 36 }: { style: ListStyle; fontSize?: number }) => (
@@ -162,13 +153,17 @@ export const SlideCanvas = forwardRef<HTMLDivElement, Props>(function SlideCanva
     </div>
   );
 
+  const Title = ({ extra }: { extra?: CSSProperties }) => (
+    <h1 style={{ ...titleStyle, ...extra }}>{rich(slide.title, slide.highlight, accent)}</h1>
+  );
+
   const Sub = () => {
     if (!slide.secondary) return null;
     if (slide.listStyle !== "none") return <List style={slide.listStyle} />;
     return <p style={subStyle}>{parseRich(slide.secondary, accent)}</p>;
   };
 
-  const footer = (color: string) => (
+  const Footer = ({ color, align = "left" }: { color: string; align?: CSSProperties["textAlign"] }) => (
     <div
       style={{
         fontFamily: brand.fonts.body,
@@ -177,28 +172,35 @@ export const SlideCanvas = forwardRef<HTMLDivElement, Props>(function SlideCanva
         textTransform: "uppercase",
         color,
         opacity: 0.85,
+        textAlign: align,
+        flex: "none",
+        marginTop: "auto",
+        paddingTop: 24,
       }}
     >
       {brand.brand} · {brand.site}
     </div>
   );
 
+  const showHandNote = !!(slide.handNote && t !== "t7" && t !== "t8");
+  const bottomReserve = (showHandNote ? 130 : 0) + (slide.showSignature ? 48 : 0);
+
   function layout(): ReactNode {
     switch (t) {
       case "t2":
         return (
-          <div style={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "center", gap: 30 }}>
+          <>
             <Title />
             <Sub />
-            {footer(brand.palette.cream)}
-          </div>
+            <Footer color={brand.palette.cream} />
+          </>
         );
 
       case "t3":
         return (
-          <div style={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+          <>
             <Title />
-            <div style={{ display: "flex", flexDirection: "column", gap: 26 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 26, marginTop: "auto" }}>
               {slide.secondary &&
                 (slide.listStyle !== "none" ? (
                   <List style={slide.listStyle} />
@@ -209,21 +211,21 @@ export const SlideCanvas = forwardRef<HTMLDivElement, Props>(function SlideCanva
                     </p>
                   </div>
                 ))}
-              {footer(brand.palette.cream)}
+              <Footer color={brand.palette.cream} />
             </div>
-          </div>
+          </>
         );
 
       case "t4": {
         const style: ListStyle = slide.listStyle !== "none" ? slide.listStyle : "number";
         return (
-          <div style={{ height: "100%", display: "flex", gap: 40 }}>
-            <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+          <div style={{ display: "flex", gap: 40, flex: 1, minHeight: 0 }}>
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", minHeight: 0, overflow: "hidden" }}>
               <List style={style} fontSize={34} />
             </div>
-            <div style={{ width: 360, display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
-              <h1 style={{ ...titleStyle, textAlign: "right" }}>{rich(slide.title, slide.highlight, accent)}</h1>
-              <div style={{ marginTop: 20, textAlign: "right" }}>{footer(textColor)}</div>
+            <div style={{ width: 360, display: "flex", flexDirection: "column", justifyContent: "flex-end", minHeight: 0 }}>
+              <Title extra={{ textAlign: "right" }} />
+              <Footer color={textColor} align="right" />
             </div>
           </div>
         );
@@ -231,31 +233,29 @@ export const SlideCanvas = forwardRef<HTMLDivElement, Props>(function SlideCanva
 
       case "t5":
         return (
-          <div style={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
-            <h1 style={{ ...titleStyle, fontStyle: "italic", maxWidth: 840 }}>{rich(slide.title, slide.highlight, accent)}</h1>
-            <div>{footer(brand.palette.cream)}</div>
-          </div>
+          <>
+            <Title extra={{ fontStyle: "italic", maxWidth: 840 }} />
+            <Footer color={brand.palette.cream} />
+          </>
         );
 
       case "t6":
         return (
-          <div style={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "center", gap: 30 }}>
-            <div style={{ width: 90, height: 4, background: accent }} />
+          <>
+            <div style={{ width: 90, height: 4, background: accent, flex: "none" }} />
             <Title />
             <Sub />
-            <div style={{ marginTop: 20 }}>{footer(onLight ? brand.palette.terracotta : brand.palette.cream)}</div>
-          </div>
+            <Footer color={onLight ? brand.palette.terracotta : brand.palette.cream} />
+          </>
         );
 
       case "t7":
         return (
-          <div style={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", gap: 24, textAlign: "center" }}>
-            <div style={{ fontFamily: brand.fonts.title, fontSize: 200, lineHeight: 0.6, color: accent, height: 110 }}>“</div>
-            <h1 style={{ ...titleStyle, fontStyle: "italic", textAlign: "center", maxWidth: 840 }}>
-              {rich(slide.title, slide.highlight, accent)}
-            </h1>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", flex: 1, minHeight: 0, gap: 24 }}>
+            <div style={{ fontFamily: brand.fonts.title, fontSize: 200, lineHeight: 0.6, color: accent, height: 110, flex: "none" }}>“</div>
+            <Title extra={{ fontStyle: "italic", textAlign: "center", maxWidth: 840 }} />
             {slide.secondary && <p style={{ ...subStyle, textAlign: "center" }}>{parseRich(slide.secondary, accent)}</p>}
-            <div style={{ marginTop: 18, fontFamily: brand.fonts.body, fontSize: 28, letterSpacing: "0.12em", textTransform: "uppercase", color: subColor }}>
+            <div style={{ fontFamily: brand.fonts.body, fontSize: 28, letterSpacing: "0.12em", textTransform: "uppercase", color: subColor }}>
               — {brand.brand}
             </div>
           </div>
@@ -263,40 +263,40 @@ export const SlideCanvas = forwardRef<HTMLDivElement, Props>(function SlideCanva
 
       case "t8":
         return (
-          <div style={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", gap: 36, textAlign: "center" }}>
-            <h1 style={{ ...titleStyle, textAlign: "center", maxWidth: 820 }}>{rich(slide.title, slide.highlight, accent)}</h1>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", flex: 1, minHeight: 0, gap: 36 }}>
+            <Title extra={{ textAlign: "center", maxWidth: 820 }} />
             {slide.secondary && (
               <div style={{ background: accent, color: brand.palette.brown, padding: "26px 46px", borderRadius: 999, fontFamily: brand.fonts.body, fontSize: 36, fontWeight: 600 }}>
                 {slide.secondary}
               </div>
             )}
-            <div style={{ position: "absolute", bottom: 90, left: 0, right: 0, textAlign: "center" }}>{footer(brand.palette.cream)}</div>
+            <Footer color={brand.palette.cream} align="center" />
           </div>
         );
 
       case "t9": {
         const style: ListStyle = slide.listStyle !== "none" ? slide.listStyle : "brace";
         return (
-          <div style={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "flex-start", gap: 36, paddingTop: 20 }}>
-            <h1 style={{ ...titleStyle, fontSize: Math.max(slide.titleSize, 96) }}>{rich(slide.title, slide.highlight, accent)}</h1>
-            <List style={style} />
-          </div>
+          <>
+            <Title extra={{ fontSize: Math.max(slide.titleSize, 96) }} />
+            <div style={{ flex: 1, minHeight: 0, overflow: "hidden", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+              <List style={style} />
+            </div>
+          </>
         );
       }
 
       case "t1":
       default:
         return (
-          <div style={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: slide.align === "center" ? "center" : "flex-start", gap: 28 }}>
-            <h1 style={{ ...titleStyle, maxWidth: 880 }}>{rich(slide.title, slide.highlight, accent)}</h1>
+          <>
+            <Title extra={{ maxWidth: 880 }} />
             <Sub />
-            <div style={{ position: "absolute", bottom: 90, left: 90, right: 90 }}>{footer(brand.palette.cream)}</div>
-          </div>
+            <Footer color={brand.palette.cream} />
+          </>
         );
     }
   }
-
-  const showHandNote = slide.handNote && t !== "t7" && t !== "t8";
 
   return (
     <div
@@ -309,6 +309,7 @@ export const SlideCanvas = forwardRef<HTMLDivElement, Props>(function SlideCanva
         background: baseBg,
         color: textColor,
         fontFamily: brand.fonts.body,
+        boxSizing: "border-box",
       }}
     >
       {hasImg && (
@@ -375,12 +376,37 @@ export const SlideCanvas = forwardRef<HTMLDivElement, Props>(function SlideCanva
         </div>
       )}
 
-      <div style={{ position: "absolute", inset: 0, padding: 90, display: "flex", flexDirection: "column" }}>{layout()}</div>
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          padding: `90px 90px ${90 + bottomReserve}px`,
+          display: "flex",
+          flexDirection: "column",
+          boxSizing: "border-box",
+          overflow: "hidden",
+        }}
+      >
+        <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", justifyContent: "center", gap: 28, overflow: "hidden" }}>
+          {layout()}
+        </div>
+      </div>
 
       {showHandNote && (
-        <div style={{ position: "absolute", left: 90, right: 90, bottom: 150, display: "flex", alignItems: "center", gap: 16, zIndex: 3 }}>
+        <div
+          style={{
+            position: "absolute",
+            left: 90,
+            right: 90,
+            bottom: slide.showSignature ? 110 : 72,
+            display: "flex",
+            alignItems: "flex-end",
+            gap: 16,
+            zIndex: 3,
+          }}
+        >
           <HandConnector color={accent} />
-          <div style={{ fontFamily: brand.fonts.hand, fontSize: 56, lineHeight: 1.06, color: accent }}>
+          <div style={{ fontFamily: brand.fonts.hand, fontSize: 48, lineHeight: 1.06, color: accent }}>
             {parseRich(slide.handNote, accent)}
           </div>
         </div>

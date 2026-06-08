@@ -5,21 +5,40 @@ import { saveAs } from "file-saver";
 const W = 1080;
 const H = 1350;
 
-async function nodeToBlob(node: HTMLElement): Promise<Blob> {
-  // Garante que as fontes carregaram antes de rasterizar.
-  if (document.fonts && document.fonts.ready) {
-    try {
-      await document.fonts.ready;
-    } catch {
-      /* ignore */
-    }
+async function preloadFonts(): Promise<void> {
+  if (!document.fonts?.load) return;
+  try {
+    await Promise.all([
+      document.fonts.load('700 96px "Playfair Display"'),
+      document.fonts.load('400 36px "Inter"'),
+      document.fonts.load('400 56px "Caveat"'),
+    ]);
+    await document.fonts.ready;
+  } catch {
+    /* ignore */
   }
+}
+
+async function nodeToBlob(node: HTMLElement): Promise<Blob> {
+  await preloadFonts();
+
+  // Pequena pausa para o browser aplicar layout/fontes no nó de exportação.
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+
   const dataUrl = await toPng(node, {
     width: W,
     height: H,
     pixelRatio: 1,
     cacheBust: true,
-    style: { transform: "none", transformOrigin: "top left", margin: "0" },
+    skipFonts: false,
+    includeQueryParams: true,
+    style: {
+      transform: "none",
+      transformOrigin: "top left",
+      margin: "0",
+      width: `${W}px`,
+      height: `${H}px`,
+    },
   });
   const res = await fetch(dataUrl);
   return await res.blob();

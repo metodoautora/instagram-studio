@@ -81,20 +81,28 @@ export function Editor({ project, brand, onUpdate, onBack }: Props) {
   const canvasRefs = useRef<(HTMLDivElement | null)[]>([]);
 
   function applyAI(parsed: ParsedAI) {
-    setProj((p) => applyAIResponse(p, parsed));
+    commit((p) => applyAIResponse(p, parsed));
     setIdx(0);
     setShowPaste(false);
   }
 
   useEffect(() => {
-    onUpdate({ ...proj, updatedAt: Date.now() });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [proj]);
+    setProj(project);
+  }, [project.id, project.updatedAt]);
+
+  function commit(updater: Project | ((p: Project) => Project)) {
+    setProj((p) => {
+      const next = typeof updater === "function" ? updater(p) : updater;
+      const saved = { ...next, updatedAt: Date.now() };
+      onUpdate(saved);
+      return saved;
+    });
+  }
 
   const current = proj.slides[Math.min(idx, proj.slides.length - 1)];
 
   function patchSlide(patch: Partial<Slide>) {
-    setProj((p) => {
+    commit((p) => {
       const slides = [...p.slides];
       slides[idx] = { ...slides[idx], ...patch };
       return { ...p, slides };
@@ -124,7 +132,7 @@ export function Editor({ project, brand, onUpdate, onBack }: Props) {
   }
 
   function duplicateSlide() {
-    setProj((p) => {
+    commit((p) => {
       const slides = [...p.slides];
       slides.splice(idx + 1, 0, { ...slides[idx], id: uid() });
       return { ...p, slides };
@@ -134,16 +142,13 @@ export function Editor({ project, brand, onUpdate, onBack }: Props) {
 
   function deleteSlide() {
     if (proj.slides.length <= 1) return;
-    setProj((p) => {
-      const slides = p.slides.filter((_, i) => i !== idx);
-      return { ...p, slides };
-    });
+    commit((p) => ({ ...p, slides: p.slides.filter((_, i) => i !== idx) }));
     setIdx((i) => Math.max(0, i - 1));
   }
 
   function moveSlide(from: number, to: number) {
     if (to < 0 || to >= proj.slides.length) return;
-    setProj((p) => {
+    commit((p) => {
       const slides = [...p.slides];
       const [m] = slides.splice(from, 1);
       slides.splice(to, 0, m);
@@ -153,7 +158,7 @@ export function Editor({ project, brand, onUpdate, onBack }: Props) {
   }
 
   function addSlide() {
-    setProj((p) => {
+    commit((p) => {
       const slides = [...p.slides];
       slides.splice(idx + 1, 0, blankSlide(brand));
       return { ...p, slides };
@@ -363,11 +368,11 @@ export function Editor({ project, brand, onUpdate, onBack }: Props) {
             <h4><FileText size={14} /> Legenda</h4>
             <label className="field field--sm">
               <span>Legenda do post</span>
-              <textarea rows={6} value={proj.caption} onChange={(e) => setProj((p) => ({ ...p, caption: e.target.value }))} />
+              <textarea rows={6} value={proj.caption} onChange={(e) => commit((p) => ({ ...p, caption: e.target.value }))} />
             </label>
             <label className="field field--sm">
               <span>Hashtags</span>
-              <textarea rows={2} value={proj.hashtags} onChange={(e) => setProj((p) => ({ ...p, hashtags: e.target.value }))} />
+              <textarea rows={2} value={proj.hashtags} onChange={(e) => commit((p) => ({ ...p, hashtags: e.target.value }))} />
             </label>
             <button className="iconbtn iconbtn--full" onClick={() => downloadCaption(proj.name, proj.caption, proj.hashtags)}>
               <Download size={14} /> Baixar legenda (.txt)
@@ -376,12 +381,10 @@ export function Editor({ project, brand, onUpdate, onBack }: Props) {
         </aside>
       </div>
 
-      {/* Cópias em tamanho real (1080x1350) usadas só para exportação — fora da tela. */}
-      <div style={{ position: "fixed", left: -100000, top: 0, pointerEvents: "none" }} aria-hidden>
+      {/* Cópias em tamanho real (1080×1350) usadas só para exportação */}
+      <div className="export-root" aria-hidden>
         {proj.slides.map((s, i) => (
-          <div key={s.id} ref={(el) => (canvasRefs.current[i] = el)}>
-            <SlideCanvas slide={s} brand={brand} />
-          </div>
+          <SlideCanvas key={s.id} ref={(el) => (canvasRefs.current[i] = el)} slide={s} brand={brand} />
         ))}
       </div>
 
