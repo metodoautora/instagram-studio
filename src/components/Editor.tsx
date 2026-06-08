@@ -16,12 +16,12 @@ import {
   X,
 } from "lucide-react";
 import { Align, BrandKit, ListStyle, LayoutId, Project, Slide, SlideImage } from "../types";
-import { CANVAS_H, CANVAS_W, SlideCanvas } from "./SlideCanvas";
+import { SlideCanvas } from "./SlideCanvas";
 import { SlideSidebar } from "./SlideSidebar";
 import { templates } from "../data/templates";
 import { regenerateSlideText } from "../utils/copyGenerator";
 import { uid } from "../utils/storage";
-import { captureSlideBlob, downloadCaption, exportCarousel, saveSlideBlob, waitForRender } from "../utils/exportSlides";
+import { captureSlideBlob, downloadCaption, exportCarousel, saveSlideBlob } from "../utils/exportSlides";
 import { buildAIPrompt } from "../utils/aiPrompt";
 import { PromptDialog } from "./PromptDialog";
 import { applyAIResponse, ParsedAI } from "../utils/aiParser";
@@ -77,10 +77,10 @@ export function Editor({ project, brand, onUpdate, onBack }: Props) {
   const [proj, setProj] = useState<Project>(project);
   const [idx, setIdx] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [exportMsg, setExportMsg] = useState("");
   const [showPrompt, setShowPrompt] = useState(false);
   const [showPaste, setShowPaste] = useState(false);
-  const [exportIdx, setExportIdx] = useState<number | null>(null);
-  const exportRef = useRef<HTMLDivElement>(null);
+  const previewCanvasRef = useRef<HTMLDivElement>(null);
 
   function applyAI(parsed: ParsedAI) {
     setProj((p) => applyAIResponse(p, parsed));
@@ -164,20 +164,23 @@ export function Editor({ project, brand, onUpdate, onBack }: Props) {
   }
 
   async function captureAt(index: number): Promise<Blob> {
-    flushSync(() => setExportIdx(index));
-    await waitForRender();
-    const node = exportRef.current;
-    if (!node) throw new Error("Nó de exportação indisponível");
-    return captureSlideBlob(node);
+    flushSync(() => setIdx(index));
+    setExportMsg(`Exportando slide ${index + 1}…`);
+    const node = previewCanvasRef.current;
+    if (!node) throw new Error("Preview do slide indisponível");
+    return captureSlideBlob(node, brand);
   }
 
   async function doExportSingle() {
     setBusy(true);
+    setExportMsg(`Exportando slide ${idx + 1}…`);
     try {
-      const blob = await captureAt(idx);
+      const node = previewCanvasRef.current;
+      if (!node) return;
+      const blob = await captureSlideBlob(node, brand);
       saveSlideBlob(blob, proj.name, idx);
     } finally {
-      flushSync(() => setExportIdx(null));
+      setExportMsg("");
       setBusy(false);
     }
   }
@@ -193,7 +196,7 @@ export function Editor({ project, brand, onUpdate, onBack }: Props) {
         proj.hashtags
       );
     } finally {
-      flushSync(() => setExportIdx(null));
+      setExportMsg("");
       setBusy(false);
     }
   }
@@ -232,7 +235,7 @@ export function Editor({ project, brand, onUpdate, onBack }: Props) {
           <div className="stage__frame">
             <div style={{ width: 1080 * PREVIEW_SCALE, height: 1350 * PREVIEW_SCALE, overflow: "hidden", boxShadow: "0 30px 80px -30px rgba(0,0,0,.5)", borderRadius: 10 }}>
               <div style={{ width: 1080, height: 1350, transform: `scale(${PREVIEW_SCALE})`, transformOrigin: "top left" }}>
-                <SlideCanvas slide={current} brand={brand} />
+                <SlideCanvas ref={previewCanvasRef} slide={current} brand={brand} forExport={busy} />
               </div>
             </div>
           </div>
@@ -391,20 +394,7 @@ export function Editor({ project, brand, onUpdate, onBack }: Props) {
         </aside>
       </div>
 
-      {/* Estúdio de exportação: renderiza o slide em 1080×1350 real (print WYSIWYG). */}
-      {exportIdx !== null && (
-        <div
-          className="export-stage"
-          aria-hidden
-          style={{ width: CANVAS_W, height: CANVAS_H }}
-        >
-          <SlideCanvas ref={exportRef} slide={proj.slides[exportIdx]} brand={brand} forExport />
-        </div>
-      )}
-
-      {busy && exportIdx !== null && (
-        <div className="export-overlay">Exportando slide {exportIdx + 1}…</div>
-      )}
+      {busy && exportMsg && <div className="export-overlay">{exportMsg}</div>}
 
       {showPrompt && <PromptDialog prompt={buildAIPrompt(proj.meta, brand)} onClose={() => setShowPrompt(false)} />}
       {showPaste && <PasteAIDialog onApply={applyAI} onClose={() => setShowPaste(false)} />}

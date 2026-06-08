@@ -698,14 +698,7 @@ input[type="range"] {
   }
 }
 
-/* Exportação WYSIWYG — slide em 1080×1350 renderizado no viewport para captura fiel */
-.export-stage {
-  position: fixed;
-  left: 0;
-  top: 0;
-  z-index: 9997;
-  pointer-events: none;
-}
+/* Overlay durante exportação */
 .export-overlay {
   position: fixed;
   inset: 0;

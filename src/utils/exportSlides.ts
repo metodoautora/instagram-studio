@@ -2,9 +2,26 @@ import { toPng } from "html-to-image";
 import JSZip from "jszip";
 import { saveAs } from "file-saver";
 import { CANVAS_H, CANVAS_W } from "../components/SlideCanvas";
+import type { BrandKit } from "../types";
 
-/** Aguarda fontes + 2 frames de paint (captura fiel ao preview). */
-export async function waitForRender(): Promise<void> {
+/** Carrega tamanhos reais usados nos slides (crítico no site, onde Google Fonts demora). */
+async function preloadFonts(brand: BrandKit): Promise<void> {
+  if (!document.fonts?.load) return;
+  const titleFamily = brand.fonts.title.match(/'([^']+)'/)?.[1] ?? "Playfair Display";
+  const bodyFamily = brand.fonts.body.match(/'([^']+)'/)?.[1] ?? "Inter";
+  const handFamily = brand.fonts.hand.match(/'([^']+)'/)?.[1] ?? "Caveat";
+  const loads = [
+    document.fonts.load(`700 140px "${titleFamily}"`),
+    document.fonts.load(`400 36px "${bodyFamily}"`),
+    document.fonts.load(`400 56px "${handFamily}"`),
+    document.fonts.load(`700 36px "${bodyFamily}"`),
+  ];
+  await Promise.all(loads.map((p) => p.catch(() => undefined)));
+}
+
+/** Aguarda fontes + layout estável antes de rasterizar. */
+export async function waitForRender(brand?: BrandKit): Promise<void> {
+  if (brand) await preloadFonts(brand);
   if (document.fonts?.ready) {
     try {
       await document.fonts.ready;
@@ -13,19 +30,19 @@ export async function waitForRender(): Promise<void> {
     }
   }
   await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
-  await new Promise((r) => setTimeout(r, 80));
+  // Rede mais lenta no GitHub Pages — espera extra para o layout flex estabilizar.
+  await new Promise((r) => setTimeout(r, 200));
 }
 
 async function nodeToBlob(node: HTMLElement): Promise<Blob> {
-  await waitForRender();
-
   const dataUrl = await toPng(node, {
     width: CANVAS_W,
     height: CANVAS_H,
     pixelRatio: 1,
     cacheBust: true,
     skipAutoScale: true,
-    backgroundColor: undefined,
+    skipFonts: false,
+    includeQueryParams: true,
     style: {
       transform: "none",
       transformOrigin: "top left",
@@ -52,7 +69,8 @@ export function saveSlideBlob(blob: Blob, baseName: string, index: number): void
   saveAs(blob, `${safeName(baseName)}-slide-${index + 1}.png`);
 }
 
-export async function captureSlideBlob(node: HTMLElement): Promise<Blob> {
+export async function captureSlideBlob(node: HTMLElement, brand: BrandKit): Promise<Blob> {
+  await waitForRender(brand);
   return nodeToBlob(node);
 }
 
