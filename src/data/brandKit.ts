@@ -17,6 +17,6 @@ export const defaultBrandKit: BrandKit = {
     body: "'Inter', 'Manrope', system-ui, sans-serif",
     hand: "'Caveat', cursive",
   },
-  grain: 38,
+  grain: 10,
   darken: 55,
 };
