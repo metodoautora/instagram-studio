@@ -33,7 +33,7 @@ export async function waitForRender(brand?: BrandKit): Promise<void> {
   await new Promise((r) => setTimeout(r, 250));
 }
 
-/** Screenshot pixel-a-pixel do nó DOM (como print da tela). */
+/** Screenshot pixel-a-pixel do preview visível (mesmo nó que você edita). */
 async function screenshotNode(node: HTMLElement): Promise<Blob> {
   const dataUrl = await domToPng(node, {
     width: CANVAS_W,

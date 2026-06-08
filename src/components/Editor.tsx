@@ -16,7 +16,7 @@ import {
   X,
 } from "lucide-react";
 import { Align, BrandKit, ListStyle, LayoutId, Project, Slide, SlideImage } from "../types";
-import { SlideCanvas } from "./SlideCanvas";
+import { CANVAS_H, CANVAS_W, SlideCanvas } from "./SlideCanvas";
 import { SlideSidebar } from "./SlideSidebar";
 import { templates } from "../data/templates";
 import { regenerateSlideText } from "../utils/copyGenerator";
@@ -80,8 +80,8 @@ export function Editor({ project, brand, onUpdate, onBack }: Props) {
   const [exportMsg, setExportMsg] = useState("");
   const [showPrompt, setShowPrompt] = useState(false);
   const [showPaste, setShowPaste] = useState(false);
-  const [captureSlide, setCaptureSlide] = useState<Slide | null>(null);
-  const captureRef = useRef<HTMLDivElement>(null);
+  const [capturing, setCapturing] = useState(false);
+  const previewRef = useRef<HTMLDivElement>(null);
 
   function applyAI(parsed: ParsedAI) {
     setProj((p) => applyAIResponse(p, parsed));
@@ -165,34 +165,26 @@ export function Editor({ project, brand, onUpdate, onBack }: Props) {
   }
 
   async function captureAt(index: number): Promise<Blob> {
-    const slide = proj.slides[index];
-    flushSync(() => {
-      setIdx(index);
-      setCaptureSlide(slide);
-    });
+    flushSync(() => setIdx(index));
     setExportMsg(`Capturando slide ${index + 1}…`);
-    await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-    const node = captureRef.current;
-    if (!node) throw new Error("Captura indisponível");
-    try {
-      return await captureSlideBlob(node, brand);
-    } finally {
-      flushSync(() => setCaptureSlide(null));
-    }
+    await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+    const node = previewRef.current;
+    if (!node) throw new Error("Preview indisponível");
+    return captureSlideBlob(node, brand);
   }
 
   async function doExportSingle() {
     setBusy(true);
+    setCapturing(true);
     setExportMsg(`Capturando slide ${idx + 1}…`);
-    flushSync(() => setCaptureSlide(proj.slides[idx]));
     try {
-      await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-      const node = captureRef.current;
+      await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+      const node = previewRef.current;
       if (!node) return;
       const blob = await captureSlideBlob(node, brand);
       saveSlideBlob(blob, proj.name, idx);
     } finally {
-      flushSync(() => setCaptureSlide(null));
+      setCapturing(false);
       setExportMsg("");
       setBusy(false);
     }
@@ -200,6 +192,7 @@ export function Editor({ project, brand, onUpdate, onBack }: Props) {
 
   async function doExportCarousel() {
     setBusy(true);
+    setCapturing(true);
     try {
       await exportCarousel(
         (i) => captureAt(i),
@@ -209,6 +202,7 @@ export function Editor({ project, brand, onUpdate, onBack }: Props) {
         proj.hashtags
       );
     } finally {
+      setCapturing(false);
       setExportMsg("");
       setBusy(false);
     }
@@ -244,11 +238,24 @@ export function Editor({ project, brand, onUpdate, onBack }: Props) {
       <div className="editor">
         <SlideSidebar slides={proj.slides} currentIndex={idx} brand={brand} onSelect={setIdx} onMove={moveSlide} onAdd={addSlide} />
 
-        <div className="stage">
+        <div className={`stage ${capturing ? "stage--capturing" : ""}`}>
           <div className="stage__frame">
-            <div style={{ width: 1080 * PREVIEW_SCALE, height: 1350 * PREVIEW_SCALE, overflow: "hidden", boxShadow: "0 30px 80px -30px rgba(0,0,0,.5)", borderRadius: 10 }}>
-              <div style={{ width: 1080, height: 1350, transform: `scale(${PREVIEW_SCALE})`, transformOrigin: "top left" }}>
-                <SlideCanvas slide={current} brand={brand} />
+            <div
+              className="stage__preview"
+              style={{
+                width: capturing ? CANVAS_W : CANVAS_W * PREVIEW_SCALE,
+                height: capturing ? CANVAS_H : CANVAS_H * PREVIEW_SCALE,
+              }}
+            >
+              <div
+                className="stage__canvas"
+                style={{
+                  width: CANVAS_W,
+                  height: CANVAS_H,
+                  transform: capturing ? "none" : `scale(${PREVIEW_SCALE})`,
+                }}
+              >
+                <SlideCanvas ref={previewRef} slide={current} brand={brand} />
               </div>
             </div>
           </div>
@@ -407,13 +414,12 @@ export function Editor({ project, brand, onUpdate, onBack }: Props) {
         </aside>
       </div>
 
-      {captureSlide && (
-        <div className="capture-portal" aria-hidden>
-          <SlideCanvas ref={captureRef} slide={captureSlide} brand={brand} />
+      {busy && exportMsg && (
+        <div className="export-overlay">
+          <p>{exportMsg}</p>
+          <p className="export-overlay__hint">Screenshot do slide que você vê — o PNG sai igual ao preview.</p>
         </div>
       )}
-
-      {busy && exportMsg && <div className="export-overlay">{exportMsg}</div>}
 
       {showPrompt && <PromptDialog prompt={buildAIPrompt(proj.meta, brand)} onClose={() => setShowPrompt(false)} />}
       {showPaste && <PasteAIDialog onApply={applyAI} onClose={() => setShowPaste(false)} />}

@@ -1,12 +1,10 @@
-import { CSSProperties, forwardRef, ReactNode } from "react";
+import { CSSProperties, forwardRef, ReactNode, useLayoutEffect, useRef } from "react";
 import { BrandKit, ListStyle, Slide } from "../types";
 import { templateKind } from "../data/templates";
+import { paintGrain } from "../utils/grainCanvas";
 
 export const CANVAS_W = 1080;
 export const CANVAS_H = 1350;
-
-const NOISE =
-  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")";
 
 function hexA(hex: string, alpha: number): string {
   const h = hex.replace("#", "");
@@ -94,6 +92,13 @@ interface Props {
 }
 
 export const SlideCanvas = forwardRef<HTMLDivElement, Props>(function SlideCanvas({ slide, brand }, ref) {
+  const grainRef = useRef<HTMLCanvasElement>(null);
+
+  useLayoutEffect(() => {
+    if (slide.grain <= 0 || !grainRef.current) return;
+    paintGrain(grainRef.current, CANVAS_W, CANVAS_H);
+  }, [slide.grain]);
+
   const t = slide.templateId;
   const kind = templateKind(t);
   const accent = slide.accent || brand.palette.orange;
@@ -353,17 +358,22 @@ export const SlideCanvas = forwardRef<HTMLDivElement, Props>(function SlideCanva
 
       <div style={{ position: "absolute", inset: 0, background: brand.palette.blackSoft, opacity: slide.darken / 100 }} />
 
-      <div
-        style={{
-          position: "absolute",
-          inset: 0,
-          backgroundImage: NOISE,
-          backgroundSize: "200px 200px",
-          opacity: grainOpacity,
-          mixBlendMode: "normal",
-          pointerEvents: "none",
-        }}
-      />
+      {slide.grain > 0 && (
+        <canvas
+          ref={grainRef}
+          width={CANVAS_W}
+          height={CANVAS_H}
+          aria-hidden
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            opacity: grainOpacity,
+            pointerEvents: "none",
+          }}
+        />
+      )}
 
       <div
         style={{
