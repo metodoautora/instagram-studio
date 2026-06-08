@@ -599,14 +599,15 @@ input[type="range"] {
   color: #ffb3b3;
 }
 
-.export-root {
+.export-capture {
   position: fixed;
   top: 0;
   left: 0;
   width: 1080px;
-  opacity: 0;
+  height: 1350px;
+  z-index: -1;
   pointer-events: none;
-  z-index: -9999;
+  opacity: 1;
   overflow: hidden;
 }
 

@@ -219,11 +219,11 @@ export const SlideCanvas = forwardRef<HTMLDivElement, Props>(function SlideCanva
       case "t4": {
         const style: ListStyle = slide.listStyle !== "none" ? slide.listStyle : "number";
         return (
-          <div style={{ display: "flex", gap: 40, flex: 1, minHeight: 0 }}>
-            <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", minHeight: 0, overflow: "hidden" }}>
+          <div style={{ display: "flex", gap: 40, width: "100%" }}>
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
               <List style={style} fontSize={34} />
             </div>
-            <div style={{ width: 360, display: "flex", flexDirection: "column", justifyContent: "flex-end", minHeight: 0 }}>
+            <div style={{ width: 360, display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
               <Title extra={{ textAlign: "right" }} />
               <Footer color={textColor} align="right" />
             </div>
@@ -251,11 +251,23 @@ export const SlideCanvas = forwardRef<HTMLDivElement, Props>(function SlideCanva
 
       case "t7":
         return (
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", flex: 1, minHeight: 0, gap: 24 }}>
-            <div style={{ fontFamily: brand.fonts.title, fontSize: 200, lineHeight: 0.6, color: accent, height: 110, flex: "none" }}>“</div>
-            <Title extra={{ fontStyle: "italic", textAlign: "center", maxWidth: 840 }} />
-            {slide.secondary && <p style={{ ...subStyle, textAlign: "center" }}>{parseRich(slide.secondary, accent)}</p>}
-            <div style={{ fontFamily: brand.fonts.body, fontSize: 28, letterSpacing: "0.12em", textTransform: "uppercase", color: subColor }}>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", gap: 28, width: "100%" }}>
+            <div style={{ fontFamily: brand.fonts.title, fontSize: 180, lineHeight: 0.9, color: accent, flexShrink: 0 }}>“</div>
+            <Title extra={{ fontStyle: "italic", textAlign: "center", maxWidth: 840, flexShrink: 0 }} />
+            {slide.secondary && (
+              <p style={{ ...subStyle, textAlign: "center", flexShrink: 0, marginTop: 4 }}>{parseRich(slide.secondary, accent)}</p>
+            )}
+            <div
+              style={{
+                fontFamily: brand.fonts.body,
+                fontSize: 28,
+                letterSpacing: "0.12em",
+                textTransform: "uppercase",
+                color: subColor,
+                flexShrink: 0,
+                marginTop: 12,
+              }}
+            >
               — {brand.brand}
             </div>
           </div>
@@ -263,7 +275,7 @@ export const SlideCanvas = forwardRef<HTMLDivElement, Props>(function SlideCanva
 
       case "t8":
         return (
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", flex: 1, minHeight: 0, gap: 36 }}>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", gap: 36, width: "100%" }}>
             <Title extra={{ textAlign: "center", maxWidth: 820 }} />
             {slide.secondary && (
               <div style={{ background: accent, color: brand.palette.brown, padding: "26px 46px", borderRadius: 999, fontFamily: brand.fonts.body, fontSize: 36, fontWeight: 600 }}>
@@ -279,9 +291,7 @@ export const SlideCanvas = forwardRef<HTMLDivElement, Props>(function SlideCanva
         return (
           <>
             <Title extra={{ fontSize: Math.max(slide.titleSize, 96) }} />
-            <div style={{ flex: 1, minHeight: 0, overflow: "hidden", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-              <List style={style} />
-            </div>
+            <List style={style} />
           </>
         );
       }
@@ -301,6 +311,7 @@ export const SlideCanvas = forwardRef<HTMLDivElement, Props>(function SlideCanva
   return (
     <div
       ref={ref}
+      data-export-bg={baseBg}
       style={{
         position: "relative",
         width: CANVAS_W,
@@ -384,10 +395,10 @@ export const SlideCanvas = forwardRef<HTMLDivElement, Props>(function SlideCanva
           display: "flex",
           flexDirection: "column",
           boxSizing: "border-box",
-          overflow: "hidden",
+          justifyContent: "center",
         }}
       >
-        <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", justifyContent: "center", gap: 28, overflow: "hidden" }}>
+        <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", gap: 28, width: "100%" }}>
           {layout()}
         </div>
       </div>

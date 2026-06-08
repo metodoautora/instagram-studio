@@ -78,7 +78,8 @@ export function Editor({ project, brand, onUpdate, onBack }: Props) {
   const [busy, setBusy] = useState(false);
   const [showPrompt, setShowPrompt] = useState(false);
   const [showPaste, setShowPaste] = useState(false);
-  const canvasRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const [capturingSlide, setCapturingSlide] = useState<Slide | null>(null);
+  const exportHostRef = useRef<HTMLDivElement>(null);
 
   function applyAI(parsed: ParsedAI) {
     commit((p) => applyAIResponse(p, parsed));
@@ -166,24 +167,35 @@ export function Editor({ project, brand, onUpdate, onBack }: Props) {
     setIdx((i) => i + 1);
   }
 
+  async function captureSlideNode(slide: Slide): Promise<HTMLElement> {
+    setCapturingSlide(slide);
+    await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+    const node = exportHostRef.current?.firstElementChild as HTMLElement | null;
+    if (!node) throw new Error("Nó de exportação não encontrado");
+    return node;
+  }
+
   async function doExportSingle() {
-    const node = canvasRefs.current[idx];
-    if (!node) return;
     setBusy(true);
     try {
+      const node = await captureSlideNode(current);
       await exportSingle(node, proj.name, idx);
     } finally {
+      setCapturingSlide(null);
       setBusy(false);
     }
   }
 
   async function doExportCarousel() {
-    const nodes = canvasRefs.current.filter((n): n is HTMLDivElement => !!n);
-    if (!nodes.length) return;
     setBusy(true);
     try {
+      const nodes: HTMLElement[] = [];
+      for (const s of proj.slides) {
+        nodes.push(await captureSlideNode(s));
+      }
       await exportCarousel(nodes, proj.name, proj.caption, proj.hashtags);
     } finally {
+      setCapturingSlide(null);
       setBusy(false);
     }
   }
@@ -381,12 +393,14 @@ export function Editor({ project, brand, onUpdate, onBack }: Props) {
         </aside>
       </div>
 
-      {/* Cópias em tamanho real (1080×1350) usadas só para exportação */}
-      <div className="export-root" aria-hidden>
-        {proj.slides.map((s, i) => (
-          <SlideCanvas key={s.id} ref={(el) => (canvasRefs.current[i] = el)} slide={s} brand={brand} />
-        ))}
-      </div>
+      {/* Monta 1 slide por vez em tamanho real para exportação fiel ao preview */}
+      {capturingSlide && (
+        <div className="export-capture" aria-hidden>
+          <div ref={exportHostRef}>
+            <SlideCanvas slide={capturingSlide} brand={brand} />
+          </div>
+        </div>
+      )}
 
       {showPrompt && <PromptDialog prompt={buildAIPrompt(proj.meta, brand)} onClose={() => setShowPrompt(false)} />}
       {showPaste && <PasteAIDialog onApply={applyAI} onClose={() => setShowPaste(false)} />}
