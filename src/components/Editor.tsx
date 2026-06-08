@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import {
   ArrowLeft,
   ClipboardPaste,
@@ -15,12 +16,12 @@ import {
   X,
 } from "lucide-react";
 import { Align, BrandKit, ListStyle, LayoutId, Project, Slide, SlideImage } from "../types";
-import { SlideCanvas } from "./SlideCanvas";
+import { CANVAS_H, CANVAS_W, SlideCanvas } from "./SlideCanvas";
 import { SlideSidebar } from "./SlideSidebar";
 import { templates } from "../data/templates";
 import { regenerateSlideText } from "../utils/copyGenerator";
 import { uid } from "../utils/storage";
-import { downloadCaption, exportCarousel, exportSingle } from "../utils/exportSlides";
+import { captureSlideBlob, downloadCaption, exportCarousel, saveSlideBlob, waitForRender } from "../utils/exportSlides";
 import { buildAIPrompt } from "../utils/aiPrompt";
 import { PromptDialog } from "./PromptDialog";
 import { applyAIResponse, ParsedAI } from "../utils/aiParser";
@@ -78,32 +79,24 @@ export function Editor({ project, brand, onUpdate, onBack }: Props) {
   const [busy, setBusy] = useState(false);
   const [showPrompt, setShowPrompt] = useState(false);
   const [showPaste, setShowPaste] = useState(false);
-  const [exportStatus, setExportStatus] = useState("");
-  const previewCanvasRef = useRef<HTMLDivElement>(null);
+  const [exportIdx, setExportIdx] = useState<number | null>(null);
+  const exportRef = useRef<HTMLDivElement>(null);
 
   function applyAI(parsed: ParsedAI) {
-    commit((p) => applyAIResponse(p, parsed));
+    setProj((p) => applyAIResponse(p, parsed));
     setIdx(0);
     setShowPaste(false);
   }
 
   useEffect(() => {
-    setProj(project);
-  }, [project.id, project.updatedAt]);
-
-  function commit(updater: Project | ((p: Project) => Project)) {
-    setProj((p) => {
-      const next = typeof updater === "function" ? updater(p) : updater;
-      const saved = { ...next, updatedAt: Date.now() };
-      onUpdate(saved);
-      return saved;
-    });
-  }
+    onUpdate({ ...proj, updatedAt: Date.now() });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [proj]);
 
   const current = proj.slides[Math.min(idx, proj.slides.length - 1)];
 
   function patchSlide(patch: Partial<Slide>) {
-    commit((p) => {
+    setProj((p) => {
       const slides = [...p.slides];
       slides[idx] = { ...slides[idx], ...patch };
       return { ...p, slides };
@@ -133,7 +126,7 @@ export function Editor({ project, brand, onUpdate, onBack }: Props) {
   }
 
   function duplicateSlide() {
-    commit((p) => {
+    setProj((p) => {
       const slides = [...p.slides];
       slides.splice(idx + 1, 0, { ...slides[idx], id: uid() });
       return { ...p, slides };
@@ -143,13 +136,16 @@ export function Editor({ project, brand, onUpdate, onBack }: Props) {
 
   function deleteSlide() {
     if (proj.slides.length <= 1) return;
-    commit((p) => ({ ...p, slides: p.slides.filter((_, i) => i !== idx) }));
+    setProj((p) => {
+      const slides = p.slides.filter((_, i) => i !== idx);
+      return { ...p, slides };
+    });
     setIdx((i) => Math.max(0, i - 1));
   }
 
   function moveSlide(from: number, to: number) {
     if (to < 0 || to >= proj.slides.length) return;
-    commit((p) => {
+    setProj((p) => {
       const slides = [...p.slides];
       const [m] = slides.splice(from, 1);
       slides.splice(to, 0, m);
@@ -159,7 +155,7 @@ export function Editor({ project, brand, onUpdate, onBack }: Props) {
   }
 
   function addSlide() {
-    commit((p) => {
+    setProj((p) => {
       const slides = [...p.slides];
       slides.splice(idx + 1, 0, blankSlide(brand));
       return { ...p, slides };
@@ -167,40 +163,37 @@ export function Editor({ project, brand, onUpdate, onBack }: Props) {
     setIdx((i) => i + 1);
   }
 
-  async function waitPreviewPaint(): Promise<HTMLElement> {
-    await new Promise<void>((r) => {
-      requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(() => r())));
-    });
-    const node = previewCanvasRef.current;
-    if (!node) throw new Error("Preview do slide não encontrado");
-    return node;
+  async function captureAt(index: number): Promise<Blob> {
+    flushSync(() => setExportIdx(index));
+    await waitForRender();
+    const node = exportRef.current;
+    if (!node) throw new Error("Nó de exportação indisponível");
+    return captureSlideBlob(node);
   }
 
   async function doExportSingle() {
     setBusy(true);
-    setExportStatus("Gerando PNG…");
     try {
-      const node = await waitPreviewPaint();
-      await exportSingle(node, proj.name, idx);
+      const blob = await captureAt(idx);
+      saveSlideBlob(blob, proj.name, idx);
     } finally {
-      setExportStatus("");
+      flushSync(() => setExportIdx(null));
       setBusy(false);
     }
   }
 
   async function doExportCarousel() {
     setBusy(true);
-    const startIdx = idx;
     try {
-      const captureFns = proj.slides.map((_, i) => async () => {
-        setExportStatus(`Exportando slide ${i + 1}/${proj.slides.length}…`);
-        setIdx(i);
-        return waitPreviewPaint();
-      });
-      await exportCarousel(captureFns, proj.name, proj.caption, proj.hashtags);
+      await exportCarousel(
+        (i) => captureAt(i),
+        proj.slides.length,
+        proj.name,
+        proj.caption,
+        proj.hashtags
+      );
     } finally {
-      setIdx(startIdx);
-      setExportStatus("");
+      flushSync(() => setExportIdx(null));
       setBusy(false);
     }
   }
@@ -227,7 +220,7 @@ export function Editor({ project, brand, onUpdate, onBack }: Props) {
             <Download size={16} /> Slide
           </button>
           <button className="btn" disabled={busy} onClick={doExportCarousel}>
-            <Images size={16} /> {busy ? exportStatus || "Exportando…" : "Exportar carrossel"}
+            <Images size={16} /> {busy ? "Exportando..." : "Exportar carrossel"}
           </button>
         </div>
       </header>
@@ -239,11 +232,10 @@ export function Editor({ project, brand, onUpdate, onBack }: Props) {
           <div className="stage__frame">
             <div style={{ width: 1080 * PREVIEW_SCALE, height: 1350 * PREVIEW_SCALE, overflow: "hidden", boxShadow: "0 30px 80px -30px rgba(0,0,0,.5)", borderRadius: 10 }}>
               <div style={{ width: 1080, height: 1350, transform: `scale(${PREVIEW_SCALE})`, transformOrigin: "top left" }}>
-                <SlideCanvas ref={previewCanvasRef} slide={current} brand={brand} />
+                <SlideCanvas slide={current} brand={brand} />
               </div>
             </div>
           </div>
-          {exportStatus && <div className="stage__export-hint">{exportStatus}</div>}
           {overflow && <div className="warn">Texto longo demais para este layout — reduza o texto ou o tamanho do título.</div>}
           <div className="stage__nav">
             <button className="iconbtn" onClick={regenText} title="Regenerar texto">
@@ -386,11 +378,11 @@ export function Editor({ project, brand, onUpdate, onBack }: Props) {
             <h4><FileText size={14} /> Legenda</h4>
             <label className="field field--sm">
               <span>Legenda do post</span>
-              <textarea rows={6} value={proj.caption} onChange={(e) => commit((p) => ({ ...p, caption: e.target.value }))} />
+              <textarea rows={6} value={proj.caption} onChange={(e) => setProj((p) => ({ ...p, caption: e.target.value }))} />
             </label>
             <label className="field field--sm">
               <span>Hashtags</span>
-              <textarea rows={2} value={proj.hashtags} onChange={(e) => commit((p) => ({ ...p, hashtags: e.target.value }))} />
+              <textarea rows={2} value={proj.hashtags} onChange={(e) => setProj((p) => ({ ...p, hashtags: e.target.value }))} />
             </label>
             <button className="iconbtn iconbtn--full" onClick={() => downloadCaption(proj.name, proj.caption, proj.hashtags)}>
               <Download size={14} /> Baixar legenda (.txt)
@@ -398,6 +390,21 @@ export function Editor({ project, brand, onUpdate, onBack }: Props) {
           </div>
         </aside>
       </div>
+
+      {/* Estúdio de exportação: renderiza o slide em 1080×1350 real (print WYSIWYG). */}
+      {exportIdx !== null && (
+        <div
+          className="export-stage"
+          aria-hidden
+          style={{ width: CANVAS_W, height: CANVAS_H }}
+        >
+          <SlideCanvas ref={exportRef} slide={proj.slides[exportIdx]} brand={brand} forExport />
+        </div>
+      )}
+
+      {busy && exportIdx !== null && (
+        <div className="export-overlay">Exportando slide {exportIdx + 1}…</div>
+      )}
 
       {showPrompt && <PromptDialog prompt={buildAIPrompt(proj.meta, brand)} onClose={() => setShowPrompt(false)} />}
       {showPaste && <PasteAIDialog onApply={applyAI} onClose={() => setShowPaste(false)} />}

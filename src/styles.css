@@ -595,16 +595,6 @@ input[type="range"] {
   color: var(--orange);
   font-weight: 600;
 }
-.detect--warn {
-  color: #ffb3b3;
-}
-
-.stage__export-hint {
-  font-size: 12px;
-  color: var(--orange);
-  text-align: center;
-  margin-top: 8px;
-}
 
 .hint {
   font-size: 11.5px;
@@ -706,4 +696,25 @@ input[type="range"] {
     border-left: none;
     border-top: 1px solid var(--line);
   }
+}
+
+/* Exportação WYSIWYG — slide em 1080×1350 renderizado no viewport para captura fiel */
+.export-stage {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 9997;
+  pointer-events: none;
+}
+.export-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 7, 5, 0.55);
+  color: var(--cream);
+  font-size: 15px;
+  letter-spacing: 0.04em;
 }

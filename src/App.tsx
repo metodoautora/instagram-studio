@@ -95,7 +95,7 @@ export default function App() {
   }
 
   if (view === "editor" && current) {
-    return <Editor key={current.id} project={current} brand={brand} onUpdate={upsert} onBack={() => setView("dashboard")} />;
+    return <Editor project={current} brand={brand} onUpdate={upsert} onBack={() => setView("dashboard")} />;
   }
 
   return (

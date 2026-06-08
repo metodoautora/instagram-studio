@@ -32,12 +32,9 @@ export function PasteAIDialog({ onApply, onClose }: Props) {
           autoFocus
         />
         <div className="modal__foot">
-          <span className={`detect ${count ? "detect--ok" : text.trim() ? "detect--warn" : ""}`}>
-            {count
-              ? `${count} slide${count > 1 ? "s" : ""} detectado${count > 1 ? "s" : ""}${parsed.caption ? " · legenda ✓" : ""}`
-              : text.trim()
-              ? "Formato não reconhecido — confira se tem Slide 1, Título:, Destaque:, etc."
-              : "Nenhum slide detectado ainda"}
+          <span className={`detect ${count ? "detect--ok" : ""}`}>
+            {count ? `${count} slide${count > 1 ? "s" : ""} detectado${count > 1 ? "s" : ""}` : "Nenhum slide detectado ainda"}
+            {parsed.caption ? " · legenda ✓" : ""}
           </span>
           <div className="modal__actions">
             <button className="btn btn--ghost" onClick={onClose}>
